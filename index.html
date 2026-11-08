@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pure WebGL 3D Engine From Scratch</title>
+  <title>Custom OBJ 3D Engine From Scratch</title>
   <style>
     html, body {
       margin: 0;
@@ -18,10 +18,19 @@
       height: 100%;
       display: block;
     }
+    #loading {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: #fff;
+      font-family: sans-serif;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
 
+  <div id="loading">Parsing model.obj...</div>
   <canvas id="glCanvas"></canvas>
 
   <script>
@@ -40,7 +49,7 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // 1. VERTEX SHADER SOURCE CODE
+    // SHADERS
     const vsSource = `
       attribute vec4 aVertexPosition;
       attribute vec4 aVertexColor;
@@ -53,7 +62,6 @@
       }
     `;
 
-    // 2. FRAGMENT SHADER SOURCE CODE
     const fsSource = `
       varying lowp vec4 vColor;
       void main(void) {
@@ -61,13 +69,10 @@
       }
     `;
 
-    // FIXED HELPER FUNCTION: Now queries gl.COMPILE_STATUS correctly
     function loadShader(gl, type, source) {
       const shader = gl.createShader(type);
       gl.shaderSource(shader, source);
       gl.compileShader(shader);
-      
-      // Verification check fixed here:
       if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
         console.error('Shader compile error:', gl.getShaderInfoLog(shader));
         gl.deleteShader(shader);
@@ -76,18 +81,12 @@
       return shader;
     }
 
-    // Initialize Shaders
     const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
     const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
-    
     const shaderProgram = gl.createProgram();
     gl.attachShader(shaderProgram, vertexShader);
     gl.attachShader(shaderProgram, fragmentShader);
     gl.linkProgram(shaderProgram);
-
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-      console.error('Shader program linking error:', gl.getProgramInfoLog(shaderProgram));
-    }
 
     const programInfo = {
       program: shaderProgram,
@@ -101,54 +100,91 @@
       },
     };
 
-    // 3. GEOMETRY MATH (Cube Coordinates)
-    const positions = [
-      -1.0, -1.0,  1.0,   1.0, -1.0,  1.0,   1.0,  1.0,  1.0,  -1.0,  1.0,  1.0,
-      -1.0, -1.0, -1.0,  -1.0,  1.0, -1.0,   1.0,  1.0, -1.0,   1.0, -1.0, -1.0,
-      -1.0,  1.0, -1.0,  -1.0,  1.0,  1.0,   1.0,  1.0,  1.0,   1.0,  1.0, -1.0,
-      -1.0, -1.0, -1.0,   1.0, -1.0, -1.0,   1.0, -1.0,  1.0,  -1.0, -1.0,  1.0,
-       1.0, -1.0, -1.0,   1.0,  1.0, -1.0,   1.0,  1.0,  1.0,   1.0, -1.0,  1.0,
-      -1.0, -1.0, -1.0,  -1.0, -1.0,  1.0,  -1.0,  1.0,  1.0,  -1.0,  1.0, -1.0,
-    ];
-
-    const positionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
-
-    const faceColors = [
-      [1.0,  0.0,  0.0,  1.0],    // Red
-      [0.0,  1.0,  0.0,  1.0],    // Green
-      [0.0,  0.0,  1.0,  1.0],    // Blue
-      [1.0,  1.0,  0.0,  1.0],    // Yellow
-      [1.0,  0.0,  1.0,  1.0],    // Purple
-      [0.0,  1.0,  1.0,  1.0],    // Cyan
-    ];
-
-    let colors = [];
-    for (var j = 0; j < faceColors.length; ++j) {
-      const c = faceColors[j];
-      colors = colors.concat(c, c, c, c);
-    }
-
-    const colorBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-
-    const indices = [
-      0,  1,  2,      0,  2,  3,    
-      4,  5,  6,      4,  6,  7,    
-      8,  9,  10,     8,  10, 11,   
-      12, 13, 14,     12, 14, 15,   
-      16, 17, 18,     16, 18, 19,   
-      20, 21, 22,     20, 22, 23,   
-    ];
-
-    const indexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
-
+    // Tracking rotation tracking variables from your working baseline
     let cubeRotationX = 0.4;
     let cubeRotationY = 0.7;
+
+    // Global pipeline buffers
+    let buffers = null;
+
+    // NATIVE JAVASCRIPT TEXT PARSER FOR AN .OBJ FILE
+    function parseOBJ(text) {
+      const objPositions = [];
+      const finalPositions = [];
+      const finalIndices = [];
+
+      // Split file text lines natively
+      const lines = text.split('\n');
+      
+      for (let line of lines) {
+        line = line.trim();
+        if (line.startsWith('v ')) {
+          // It's a vertex point coordinate (X Y Z)
+          const parts = line.split(/\s+/).slice(1).map(Number);
+          objPositions.push(parts);
+        } else if (line.startsWith('f ')) {
+          // It's a face connection link (Tris/Quads)
+          const parts = line.split(/\s+/).slice(1).map(p => parseInt(p.split('/')[0]) - 1);
+          
+          // Basic triangulation handler for multi-vertex polygon faces
+          for (let i = 1; i < parts.length - 1; i++) {
+            finalIndices.push(parts[0], parts[i], parts[i+1]);
+          }
+        }
+      }
+
+      // Format flat typed layout structures for graphic pipelines
+      const flattenedPositions = objPositions.flat();
+      
+      // Inject standard clay-colored mesh shading fallback directly into memory array loops
+      const flattenedColors = [];
+      for (let i = 0; i < objPositions.length; i++) {
+        flattenedColors.push(0.7, 0.7, 0.7, 1.0); // Soft grey clay styling
+      }
+
+      return {
+        positions: new Float32Array(flattenedPositions),
+        colors: new Float32Array(flattenedColors),
+        indices: new Uint16Array(finalIndices)
+      };
+    }
+
+    // Load file via GitHub server runtime configurations
+    fetch('model.obj')
+      .then(response => {
+        if (!response.ok) throw new Error('Failed to find model.obj in directory');
+        return response.text();
+      })
+      .then(text => {
+        const meshData = parseOBJ(text);
+
+        // Bind structured mesh variables directly to WebGL contexts
+        const positionBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, meshData.positions, gl.STATIC_DRAW);
+
+        const colorBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        gl.bufferData(gl.ARRAY_BUFFER, meshData.colors, gl.STATIC_DRAW);
+
+        const indexBuffer = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, meshData.indices, gl.STATIC_DRAW);
+
+        buffers = {
+          position: positionBuffer,
+          color: colorBuffer,
+          index: indexBuffer,
+          vertexCount: meshData.indices.length
+        };
+
+        document.getElementById('loading').style.display = 'none';
+        requestAnimationFrame(drawScene);
+      })
+      .catch(err => {
+        document.getElementById('loading').textContent = 'Error: ' + err.message;
+        console.error(err);
+      });
 
     function perspectiveMatrix(fovy, aspect, near, far) {
       const f = 1.0 / Math.tan(fovy / 2);
@@ -162,6 +198,8 @@
     }
 
     function drawScene() {
+      if (!buffers) return;
+
       gl.clearColor(0.07, 0.07, 0.09, 1.0);
       gl.clearDepth(1.0);
       gl.enable(gl.DEPTH_TEST);
@@ -177,35 +215,33 @@
         cy, sx * sy, -cx * sy, 0,
         0, cx, sx, 0,
         sy, -sx * cy, cx * cy, 0,
-        0, 0, -6.0, 1
+        0, 0, -8.0, 1 // Extends camera distance outward slightly to accommodate models
       ];
 
-      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
       gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
 
-      gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
       gl.vertexAttribPointer(programInfo.attribLocations.vertexColor, 4, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
 
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.index);
 
       gl.useProgram(programInfo.program);
 
       gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, new Float32Array(projectionMatrix));
       gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, new Float32Array(modelViewMatrix));
 
-      gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+      gl.drawElements(gl.TRIANGLES, buffers.vertexCount, gl.UNSIGNED_SHORT, 0);
 
-      cubeRotationX += 0.01;
-      cubeRotationY += 0.015;
+      cubeRotationX += 0.002;
+      cubeRotationY += 0.003;
 
       requestAnimationFrame(drawScene);
     }
 
-    requestAnimationFrame(drawScene);
-
-    // Interaction mechanics
+    // Drag Interaction loop logic from your working file
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
 

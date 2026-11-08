@@ -1,52 +1,131 @@
-    // Fixed Interaction Mechanics: Track mouse drag relative to viewport space
-    let isDragging = false;
-    let previousMousePosition = { x: 0, y: 0 };
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flawless 3D Rotation Matrix From Scratch</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #111;
+      overflow: hidden;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+  </style>
+</head>
+<body>
 
-    canvas.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-    });
+  <canvas id="glCanvas"></canvas>
 
-    window.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      
-      const deltaX = e.clientX - previousMousePosition.x;
-      const deltaY = e.clientY - previousMousePosition.y;
+  <script>
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl');
 
-      // Create a threshold matrix calculation based on the current top/bottom flip
-      // If the cube is upside down on the X-axis, invert the horizontal panning matrix vector
-      const cosX = Math.cos(cubeRotationX);
-      const directionModifier = cosX > 0 ? 1 : -1;
+    if (!gl) {
+      alert('WebGL not supported by your browser');
+    }
 
-      // Apply consistent transformation values
-      cubeRotationY += deltaX * 0.01 * directionModifier;
-      cubeRotationX += deltaY * 0.01;
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-    });
-
-    window.addEventListener('mouseup', () => isDragging = false);
-    
-    // Add touch support for mobile browsers too
-    canvas.addEventListener('touchstart', (e) => {
-      if (e.touches.length === 1) {
-        isDragging = true;
-        previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    const vsSource = `
+      attribute vec4 aVertexPosition;
+      attribute vec4 aVertexColor;
+      uniform mat4 uModelViewMatrix;
+      uniform mat4 uProjectionMatrix;
+      varying lowp vec4 vColor;
+      void main(void) {
+        gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+        vColor = aVertexColor;
       }
-    });
+    `;
 
+    const fsSource = `
+      varying lowp vec4 vColor;
+      void main(void) {
+        gl_FragColor = vColor;
+      }
+    `;
+
+    function loadShader(gl, type, source) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        console.error('Shader compile error:', gl.getShaderInfoLog(shader));
+        gl.deleteShader(shader);
+        return null;
+      }
+      return shader;
+    }
+
+    const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+    const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+    const shaderProgram = gl.createProgram();
+    gl.attachShader(shaderProgram, vertexShader);
+    gl.attachShader(shaderProgram, fragmentShader);
+    gl.linkProgram(shaderProgram);
+
+    const programInfo = {
+      program: shaderProgram,
+      attribLocations: {
+        vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
+        vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
+      },
+      uniformLocations: {
+        projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
+        modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
+      },
+    };
+
+    const positions = [
+      -1.0, -1.0,  1.0,   1.0, -1.0,  1.0,   1.0,  1.0,  1.0,  -1.0,  1.0,  1.0,
+      -1.0, -1.0, -1.0,  -1.0,  1.0, -1.0,   1.0,  1.0, -1.0,   1.0, -1.0, -1.0,
+      -1.0,  1.0, -1.0,  -1.0,  1.0,  1.0,   1.0,  1.0,  1.0,   1.0,  1.0, -1.0,
+      -1.0, -1.0, -1.0,   1.0, -1.0, -1.0,   1.0, -1.0,  1.0,  -1.0, -1.0,  1.0,
+       1.0, -1.0, -1.0,   1.0,  1.0, -1.0,   1.0,  1.0,  1.0,   1.0, -1.0,  1.0,
+      -1.0, -1.0, -1.0,  -1.0, -1.0,  1.0,  -1.0,  1.0,  1.0,  -1.0,  1.0, -1.0,
+    ];
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+    const faceColors = [
+      [1.0,  0.0,  0.0,  1.0], // Red
+      [0.0,  1.0,  0.0,  1.0], // Green
+      [0.0,  0.0,  1.0,  1.0], // Blue
+      [1.0,  1.0,  0.0,  1.0], // Yellow
+      [1.0,  0.0,  1.0,  1.0], // Purple
+      [0.0,  1.0,  1.0,  1.0], // Cyan
+    ];
+
+    let colors = [];
+    for (var j = 0; j  handleDragStart(e.clientX, e.clientY));
+    window.addEventListener('mousemove', (e) => handleDragMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', () => isDragging = false);
+
+    // Mobile Touch Events
+    canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) handleDragStart(e.touches[0].clientX, e.touches[0].clientY);
+    });
     window.addEventListener('touchmove', (e) => {
-      if (!isDragging || e.touches.length !== 1) return;
-      const deltaX = e.touches[0].clientX - previousMousePosition.x;
-      const deltaY = e.touches[0].clientY - previousMousePosition.y;
-
-      const cosX = Math.cos(cubeRotationX);
-      const directionModifier = cosX > 0 ? 1 : -1;
-
-      cubeRotationY += deltaX * 0.01 * directionModifier;
-      cubeRotationX += deltaY * 0.01;
-
-      previousMousePosition = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      if (e.touches.length === 1) handleDragMove(e.touches[0].clientX, e.touches[0].clientY);
     });
-
     window.addEventListener('touchend', () => isDragging = false);
+  </script>
+
+</body>
+</html>

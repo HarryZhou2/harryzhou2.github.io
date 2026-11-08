@@ -3,17 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D Pop-Out Card Effect</title>
+  <title>Scroll-Driven 3D Perspective Shift</title>
   
-  <!-- Import the official Google Model Viewer library -->
+  <!-- Import Google Model Viewer -->
   <script type="module" src="https://googleapis.com"></script>
 
   <style>
-    :root {
-      --transition-speed: 0.5s;
-    }
-
-    /* Reset and centering layout */
     * {
       box-sizing: border-box;
       margin: 0;
@@ -21,106 +16,160 @@
     }
 
     body {
-      background-color: #1e1e24; /* Dark sleek background highlights the pop effect */
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0b0b0f;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Long scrolling track to give the user room to scroll */
+    .scroll-track {
+      height: 300vh; 
+      position: relative;
+    }
+
+    /* Keeps the 3D canvas locked in the center of the screen while scrolling */
+    .viewer-sticky-wrapper {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 100vh;
-      overflow: hidden;
-      perspective: 1000px; /* Essential for 3D page depth */
+      pointer-events: none; /* Let scroll events pass through to the page */
     }
 
-    /* Outer wrapper that manages bounds */
-    .card-container {
-      position: relative;
-      width: 320px;
-      height: 420px;
-      cursor: pointer;
-      /* Crucial: DO NOT hide overflow, otherwise the model can't pop out! */
-    }
-
-    /* The flat visual frame/card */
-    .card-background {
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(145deg, #2e2e38, #18181d);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 24px;
-      padding: 30px;
-      display: flex;
-      flex-direction: column;
-      justify-content: flex-end; /* Pushes content down to leave room for the model */
-      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
-      transition: transform var(--transition-speed) cubic-bezier(0.25, 1, 0.5, 1), 
-                  box-shadow var(--transition-speed) ease;
-    }
-
-    /* Typography inside the card */
-    .card-background h3 {
-      color: #ffffff;
-      font-size: 1.5rem;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-
-    .card-background p {
-      color: #a0a0ab;
-      font-size: 0.9rem;
-      line-height: 1.4;
-    }
-
-    /* The 3D Model placement */
     model-viewer {
-      width: 140%;        /* Excess width to visually spill past left and right card edges */
-      height: 90%;        /* Taller canvas footprint */
-      position: absolute;
-      top: -25%;          /* Pulled aggressively upwards past the top edge */
-      left: -20%;         /* Offset to balance the 140% canvas width precisely in the center */
-      
-      /* Avoid intercepting normal page scroll or gesture drags until active */
-      pointer-events: none; 
-      
-      /* Smooth return transformation when hover ends */
-      transition: transform var(--transition-speed) cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      width: 80vw;
+      height: 80vh;
+      max-width: 800px;
+      max-height: 800px;
+      pointer-events: auto; /* Re-enable pointer events just for the model if needed */
+      --min-camera-orbit: auto auto auto;
+      --max-camera-orbit: auto auto auto;
     }
 
-    /* --- THE HOVER POP-OUT TRIGGERS --- */
-    
-    /* Subtle push-back and lift effect on the card framing itself */
-    .card-container:hover .card-background {
-      transform: rotateX(8deg) translateY(5px);
-      box-shadow: 0 45px 80px rgba(0, 0, 0, 0.6);
+    /* Educational guide overlay to see the mechanics working */
+    .scroll-hints {
+      position: fixed;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      padding: 15px 30px;
+      border-radius: 50px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      text-align: center;
+      pointer-events: none;
     }
 
-    /* Aggressive scaling and forward shift for the model viewport */
-    .card-container:hover model-viewer {
-      pointer-events: auto;                  /* Allow user rotation/interaction once hovered */
-      transform: translateY(-15px) scale(1.25); /* Lift up and balloon outwards toward viewer */
+    .scroll-hints h2 {
+      font-size: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #00ffcc;
+      margin-bottom: 4px;
+    }
+
+    .scroll-hints p {
+      font-size: 0.85rem;
+      color: #8a8a93;
     }
   </style>
 </head>
 <body>
 
-  <div class="card-container">
-    <!-- Flat background canvas -->
-    <div class="card-background">
-      <h3>Neil Armstrong</h3>
-      <p>Hover and drag to test interactive 3D depth limits directly on your webpage.</p>
-    </div>
+  <!-- The scroll container -->
+  <div class="scroll-track">
     
-    <!-- 3D Component layer -->
-    <!-- Swap the 'src' value below to target your own .glb model -->
-    <model-viewer 
-      src="https://modelviewer.dev" 
-      alt="A 3D model of an astronaut floating out of a card UI"
-      shadow-intensity="2" 
-      shadow-softness="0.8"
-      camera-controls 
-      auto-rotate 
-      disable-zoom>
-    </model-viewer>
+    <!-- Fixed viewport container -->
+    <div class="viewer-sticky-wrapper">
+      
+      <!-- 
+        Using a standard Box model for clear geometry visualization.
+        'interaction-prompt="none"' disables default hand animations.
+      -->
+      <model-viewer 
+        id="perspective-model"
+        src="https://modelviewer.dev" 
+        alt="A 3D object transitioning perspectives"
+        camera-controls
+        interaction-prompt="none"
+        shadow-intensity="1.5"
+        shadow-softness="0.5">
+      </model-viewer>
+
+    </div>
+
   </div>
+
+  <!-- HUD overlay showing active state -->
+  <div class="scroll-hints">
+    <h2 id="hud-title">Far Away View</h2>
+    <p>Scroll down to fly directly overhead</p>
+  </div>
+
+  <script>
+    const modelViewer = document.getElementById('perspective-model');
+    const hudTitle = document.getElementById('hud-title');
+
+    // Camera settings for our two key states
+    const config = {
+      // STARTING STATE (Far away, view from side/front and slightly top)
+      start: {
+        degX: 45,    // Horizontal angle (shows the side)
+        degY: 65,    // Vertical angle (65 deg down from top = looking mostly at side)
+        distance: 4  // Far away radius (in meters/relative units)
+      },
+      // ENDING STATE (Close up, perfectly overhead bird's-eye view)
+      end: {
+        degX: 0,     // Horizontal angle perfectly flattened 
+        degY: 0,     // Vertical angle 0 = pointing directly downwards from the ceiling
+        distance: 1.5 // Zoomed in closely
+      }
+    };
+
+    function updatePerspective() {
+      // 1. Calculate how far down the page the user has scrolled (0.0 to 1.0)
+      const scrollTop = window.scrollY;
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      
+      // Prevent division by zero if page hasn't rendered sizing yet
+      if (maxScroll <= 0) return;
+      
+      const scrollFraction = Math.min(Math.max(scrollTop / maxScroll, 0), 1);
+
+      // 2. Interpolate values linearly based on scroll fraction
+      const currentDegX = config.start.degX + (config.end.degX - config.start.degX) * scrollFraction;
+      const currentDegY = config.start.degY + (config.end.degY - config.start.degY) * scrollFraction;
+      const currentDistance = config.start.distance + (config.end.distance - config.start.distance) * scrollFraction;
+
+      // 3. Apply calculated parameters to the model-viewer camera-orbit attribute
+      // Syntax: camera-orbit="[horizontal angle]deg [vertical angle]deg [distance]"
+      modelViewer.cameraOrbit = `${currentDegX}deg ${currentDegY}deg ${currentDistance}m`;
+
+      // 4. Update HUD text to reflect layout state changes
+      if (scrollFraction < 0.2) {
+        hudTitle.textContent = "Perspective: Far (Side/Top View)";
+        hudTitle.style.color = "#00ffcc";
+      } else if (scrollFraction > 0.8) {
+        hudTitle.textContent = "Perspective: Overhead (Top Only)";
+        hudTitle.style.color = "#ff007f";
+      } else {
+        hudTitle.textContent = "Perspective: Shifting Camera...";
+        hudTitle.style.color = "#ffcc00";
+      }
+    }
+
+    // Bind logic to window scrolling and initialization checks
+    window.addEventListener('scroll', updatePerspective);
+    window.addEventListener('resize', updatePerspective);
+    
+    // Fire once on load to ensure proper camera placement on refresh
+    modelViewer.addEventListener('load', updatePerspective);
+  </script>
 
 </body>
 </html>

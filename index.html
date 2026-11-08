@@ -314,7 +314,7 @@
     // ADD THIS SCROLL ZOOM LISTENENER AT THE VERY END OF YOUR SCRIPT:
 window.addEventListener('wheel', (e) => {
   const zoomSpeed = 0.005; 
-  cameraDistance += e.deltaY * zoomSpeed;
+  cameraDistance -= e.deltaY * zoomSpeed;
   
   // Prevents the camera from clipping inside or traveling too far away
   if (cameraDistance > -1.5) cameraDistance = -1.5;  

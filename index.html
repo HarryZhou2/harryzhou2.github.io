@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Model Test</title>
+  
+  <!-- Load the Google web component library -->
+  <script type="module" src="https://googleapis.com"></script>
+
+  <style>
+    /* Make the page take up 100% of the browser view with a white background */
+    body, html {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #ffffff; 
+      overflow: hidden;
+    }
+
+    /* Force the 3D viewer canvas to fill the entire window */
+    model-viewer {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 
+    CRITICAL: 
+    1. Replace 'your-file.glb' with the EXACT name of your converted 3D file.
+    2. Ensure this HTML file and your 3D file are in the same folder.
+  -->
+  <model-viewer 
+    src="Agamemnon Helmet.glb" 
+    alt="A test 3D model"
+    auto-rotate
+    camera-controls
+    environment-image="neutral"
+    shadow-intensity="1">
+  </model-viewer>
+
+</body>
+</html>

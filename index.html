@@ -14,6 +14,7 @@
       background-color: #ffffff; 
       overflow: hidden;
     }
+
     model-viewer {
       width: 100%;
       height: 100%;
@@ -22,6 +23,7 @@
 </head>
 <body>
 
+  <!-- Ensure your filename matches exactly (case-sensitive on GitHub) -->
   <model-viewer 
     src="Agamemnon%20Helmet.glb" 
     alt="A test 3D model"
@@ -32,11 +34,11 @@
   </model-viewer>
 
   <!-- 
-    No script tag in head. 
-    Instead, we use a native browser module to bypass CORS filters.
+    This loads the 3D player natively using modern browser modules. 
+    It is fully allowed on GitHub Pages and bypasses CORS.
   -->
   <script type="module">
-    import 'https://esm.sh';
+    import 'https://jsdelivr.net';
   </script>
 
 </body>

@@ -103,6 +103,7 @@
 
     let cubeRotationX = 0.4;
     let cubeRotationY = 0.7;
+    let cameraDistance = -6.0;
     let buffers = null;
 
     // PARSER UPGRADE: Uses explicit array helper parameters to prevent text stripping errors
@@ -268,7 +269,7 @@
         cy, sx * sy, -cx * sy, 0,
         0, cx, sx, 0,
         sy, -sx * cy, cx * cy, 0,
-        0, 0, -6.0, 1
+        0, 0, cameraDistance, 1
       ];
 
       gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);

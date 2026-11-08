@@ -1,10 +1,126 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>My GitHub Pages Site</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Pop-Out Card Effect</title>
+  
+  <!-- Import the official Google Model Viewer library -->
+  <script type="module" src="https://googleapis.com"></script>
+
+  <style>
+    :root {
+      --transition-speed: 0.5s;
+    }
+
+    /* Reset and centering layout */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: #1e1e24; /* Dark sleek background highlights the pop effect */
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+      perspective: 1000px; /* Essential for 3D page depth */
+    }
+
+    /* Outer wrapper that manages bounds */
+    .card-container {
+      position: relative;
+      width: 320px;
+      height: 420px;
+      cursor: pointer;
+      /* Crucial: DO NOT hide overflow, otherwise the model can't pop out! */
+    }
+
+    /* The flat visual frame/card */
+    .card-background {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(145deg, #2e2e38, #18181d);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 30px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end; /* Pushes content down to leave room for the model */
+      box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+      transition: transform var(--transition-speed) cubic-bezier(0.25, 1, 0.5, 1), 
+                  box-shadow var(--transition-speed) ease;
+    }
+
+    /* Typography inside the card */
+    .card-background h3 {
+      color: #ffffff;
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .card-background p {
+      color: #a0a0ab;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+
+    /* The 3D Model placement */
+    model-viewer {
+      width: 140%;        /* Excess width to visually spill past left and right card edges */
+      height: 90%;        /* Taller canvas footprint */
+      position: absolute;
+      top: -25%;          /* Pulled aggressively upwards past the top edge */
+      left: -20%;         /* Offset to balance the 140% canvas width precisely in the center */
+      
+      /* Avoid intercepting normal page scroll or gesture drags until active */
+      pointer-events: none; 
+      
+      /* Smooth return transformation when hover ends */
+      transition: transform var(--transition-speed) cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    /* --- THE HOVER POP-OUT TRIGGERS --- */
+    
+    /* Subtle push-back and lift effect on the card framing itself */
+    .card-container:hover .card-background {
+      transform: rotateX(8deg) translateY(5px);
+      box-shadow: 0 45px 80px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Aggressive scaling and forward shift for the model viewport */
+    .card-container:hover model-viewer {
+      pointer-events: auto;                  /* Allow user rotation/interaction once hovered */
+      transform: translateY(-15px) scale(1.25); /* Lift up and balloon outwards toward viewer */
+    }
+  </style>
 </head>
 <body>
-    <h1>Hello, World!</h1>
-    <p>My website is officially live.</p>
+
+  <div class="card-container">
+    <!-- Flat background canvas -->
+    <div class="card-background">
+      <h3>Neil Armstrong</h3>
+      <p>Hover and drag to test interactive 3D depth limits directly on your webpage.</p>
+    </div>
+    
+    <!-- 3D Component layer -->
+    <!-- Swap the 'src' value below to target your own .glb model -->
+    <model-viewer 
+      src="https://modelviewer.dev" 
+      alt="A 3D model of an astronaut floating out of a card UI"
+      shadow-intensity="2" 
+      shadow-softness="0.8"
+      camera-controls 
+      auto-rotate 
+      disable-zoom>
+    </model-viewer>
+  </div>
+
 </body>
 </html>

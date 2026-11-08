@@ -104,7 +104,7 @@
     let cubeRotationY = 0.7;
     let buffers = null;
 
-    // FIXED NATIVE JAVASCRIPT TEXT PARSER FOR OBJ FILES
+    // UPGRADED WEB-FREE OBJ PARSER
     function parseOBJ(text) {
       const objPositions = [];
       const finalPositions = [];
@@ -113,33 +113,38 @@
       
       let indexCounter = 0;
 
-      const lines = text.split('\n');
+      // Handle both Windows (\r\n) and Unix (\n) line breaks cleanly
+      const lines = text.split(/\r?\n/);
       
-      for (let line of lines) {
-        line = line.trim();
+      for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        
+        // Skip empty lines or commented files entirely
+        if (line.length === 0 || line.startsWith('#')) continue;
+
         if (line.startsWith('v ')) {
+          // Parse coordinates while explicitly filtering whitespace artifacts
           const parts = line.split(/\s+/).slice(1).map(Number);
           objPositions.push(parts);
         } else if (line.startsWith('f ')) {
           const parts = line.split(/\s+/).slice(1).map(p => {
-            // Grab only the first digit before any texture/normal slashes (v/vt/vn structure)
-            return parseInt(p.split('/')[0]) - 1;
+            // Isolates integers cleanly before slashes or hidden return parameters
+            return parseInt(p.split('/')[0], 10) - 1;
           });
           
-          // Construct explicit triangles safely from the vertex lookup pool
-          // This loop works smoothly whether the face contains 3 points (tris) or 4 points (quads)
-          for (let i = 1; i < parts.length - 1; i++) {
+          // Secure triangulation loop: cleanly strings indices sequentially
+          for (let j = 1; j < parts.length - 1; j++) {
             const v0 = objPositions[parts[0]];
-            const v1 = objPositions[parts[i]];
-            const v2 = objPositions[parts[i+1]];
+            const v1 = objPositions[parts[j]];
+            const v2 = objPositions[parts[j+1]];
 
             if (v0 && v1 && v2) {
               finalPositions.push(...v0, ...v1, ...v2);
               
-              // Apply simple shading fallback gradients based on geometry order to give 3D depth definitions
-              finalColors.push(0.5, 0.5, 0.6, 1.0); // Slate tint point 1
-              finalColors.push(0.6, 0.6, 0.7, 1.0); // Medium tint point 2
-              finalColors.push(0.7, 0.7, 0.8, 1.0); // Light highlight point 3
+              // Smooth grayscale shading transitions mapping to surface angles
+              finalColors.push(0.45, 0.45, 0.48, 1.0);
+              finalColors.push(0.55, 0.55, 0.58, 1.0);
+              finalColors.push(0.65, 0.65, 0.68, 1.0);
 
               finalIndices.push(indexCounter, indexCounter + 1, indexCounter + 2);
               indexCounter += 3;
@@ -165,7 +170,7 @@
         const meshData = parseOBJ(text);
 
         if (meshData.positions.length === 0) {
-          throw new Error("Parsed 0 vertices. Your OBJ file format might be empty or unindexed.");
+          throw new Error("Parsed 0 vertices. Check if file format matches.");
         }
 
         const positionBuffer = gl.createBuffer();
@@ -224,7 +229,7 @@
         cy, sx * sy, -cx * sy, 0,
         0, cx, sx, 0,
         sy, -sx * cy, cx * cy, 0,
-        0, 0, -8.0, 1 // Pushes camera back to keep custom models fully visible in screen space
+        0, 0, -8.0, 1
       ];
 
       gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
@@ -250,7 +255,6 @@
       requestAnimationFrame(drawScene);
     }
 
-    // Interaction loop
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Custom OBJ 3D Engine From Scratch</title>
+  <title>Production-Ready OBJ 3D Engine From Scratch</title>
   <style>
     html, body {
       margin: 0;
@@ -30,7 +30,7 @@
 </head>
 <body>
 
-  <div id="loading">Parsing model.obj...</div>
+  <div id="loading">Auto-centering and parsing mesh model...</div>
   <canvas id="glCanvas"></canvas>
 
   <script>
@@ -49,7 +49,6 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    // SHADERS
     const vsSource = `
       attribute vec4 aVertexPosition;
       attribute vec4 aVertexColor;
@@ -104,7 +103,6 @@
     let cubeRotationY = 0.7;
     let buffers = null;
 
-    // UPGRADED WEB-FREE OBJ PARSER
     function parseOBJ(text) {
       const objPositions = [];
       const finalPositions = [];
@@ -113,44 +111,82 @@
       
       let indexCounter = 0;
 
-      // Handle both Windows (\r\n) and Unix (\n) line breaks cleanly
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      let minZ = Infinity, maxZ = -Infinity;
+
       const lines = text.split(/\r?\n/);
       
       for (let i = 0; i < lines.length; i++) {
         let line = lines[i].trim();
-        
-        // Skip empty lines or commented files entirely
         if (line.length === 0 || line.startsWith('#')) continue;
 
-        if (line.startsWith('v ')) {
-          // Parse coordinates while explicitly filtering whitespace artifacts
-          const parts = line.split(/\s+/).slice(1).map(Number);
-          objPositions.push(parts);
-        } else if (line.startsWith('f ')) {
-          const parts = line.split(/\s+/).slice(1).map(p => {
-            // Isolates integers cleanly before slashes or hidden return parameters
-            return parseInt(p.split('/')[0], 10) - 1;
-          });
+        const parts = line.split(/\s+/);
+        const type = parts[0];
+
+        if (type === 'v') {
+          const x = Number(parts[1]);
+          const y = Number(parts[2]);
+          const z = Number(parts[3]);
           
-          // Secure triangulation loop: cleanly strings indices sequentially
-          for (let j = 1; j < parts.length - 1; j++) {
-            const v0 = objPositions[parts[0]];
-            const v1 = objPositions[parts[j]];
-            const v2 = objPositions[parts[j+1]];
+          if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+            objPositions.push([x, y, z]);
+            
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+            if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+          }
+        } else if (type === 'f') {
+          const faceIndices = [];
+          
+          for (let k = 1; k < parts.length; k++) {
+            if (!parts[k]) continue;
+            
+            let vertexIndex = parseInt(parts[k].split('/')[0], 10);
+            
+            if (!isNaN(vertexIndex)) {
+              if (vertexIndex < 0) {
+                vertexIndex = objPositions.length + vertexIndex;
+              } else {
+                vertexIndex = vertexIndex - 1; 
+              }
+              faceIndices.push(vertexIndex);
+            }
+          }
+          
+          for (let j = 1; j < faceIndices.length - 1; j++) {
+            const v0 = objPositions[faceIndices[0]];
+            const v1 = objPositions[faceIndices[j]];
+            const v2 = objPositions[faceIndices[j+1]];
 
             if (v0 && v1 && v2) {
               finalPositions.push(...v0, ...v1, ...v2);
               
-              // Smooth grayscale shading transitions mapping to surface angles
-              finalColors.push(0.45, 0.45, 0.48, 1.0);
-              finalColors.push(0.55, 0.55, 0.58, 1.0);
-              finalColors.push(0.65, 0.65, 0.68, 1.0);
+              finalColors.push(0.40, 0.40, 0.45, 1.0);
+              finalColors.push(0.55, 0.55, 0.60, 1.0);
+              finalColors.push(0.65, 0.65, 0.70, 1.0);
 
               finalIndices.push(indexCounter, indexCounter + 1, indexCounter + 2);
               indexCounter += 3;
             }
           }
         }
+      }
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const centerZ = (minZ + maxZ) / 2;
+
+      const sizeX = maxX - minX;
+      const sizeY = maxY - minY;
+      const sizeZ = maxZ - minZ;
+      const maxDimension = Math.max(sizeX, sizeY, sizeZ);
+      const scaleFactor = maxDimension > 0 ? (2.5 / maxDimension) : 1;
+
+      for (let i = 0; i < finalPositions.length; i += 3) {
+        finalPositions[i]     = (finalPositions[i]     - centerX) * scaleFactor;
+        finalPositions[i + 1] = (finalPositions[i + 1] - centerY) * scaleFactor;
+        finalPositions[i + 2] = (finalPositions[i + 2] - centerZ) * scaleFactor;
       }
 
       return {
@@ -160,17 +196,16 @@
       };
     }
 
-    // Load file from repository 
     fetch('model.obj')
       .then(response => {
-        if (!response.ok) throw new Error('Failed to find model.obj in directory');
+        if (!response.ok) throw new Error('Failed to find model.obj in repository folder');
         return response.text();
       })
       .then(text => {
         const meshData = parseOBJ(text);
 
         if (meshData.positions.length === 0) {
-          throw new Error("Parsed 0 vertices. Check if file format matches.");
+          throw new Error("Empty index grid data mapping compiled.");
         }
 
         const positionBuffer = gl.createBuffer();
@@ -229,7 +264,7 @@
         cy, sx * sy, -cx * sy, 0,
         0, cx, sx, 0,
         sy, -sx * cy, cx * cy, 0,
-        0, 0, -8.0, 1
+        0, 0, -6.0, 1
       ];
 
       gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);

@@ -100,56 +100,62 @@
       },
     };
 
-    // Tracking rotation tracking variables from your working baseline
     let cubeRotationX = 0.4;
     let cubeRotationY = 0.7;
-
-    // Global pipeline buffers
     let buffers = null;
 
-    // NATIVE JAVASCRIPT TEXT PARSER FOR AN .OBJ FILE
+    // FIXED NATIVE JAVASCRIPT TEXT PARSER FOR OBJ FILES
     function parseOBJ(text) {
       const objPositions = [];
       const finalPositions = [];
+      const finalColors = [];
       const finalIndices = [];
+      
+      let indexCounter = 0;
 
-      // Split file text lines natively
       const lines = text.split('\n');
       
       for (let line of lines) {
         line = line.trim();
         if (line.startsWith('v ')) {
-          // It's a vertex point coordinate (X Y Z)
           const parts = line.split(/\s+/).slice(1).map(Number);
           objPositions.push(parts);
         } else if (line.startsWith('f ')) {
-          // It's a face connection link (Tris/Quads)
-          const parts = line.split(/\s+/).slice(1).map(p => parseInt(p.split('/')[0]) - 1);
+          const parts = line.split(/\s+/).slice(1).map(p => {
+            // Grab only the first digit before any texture/normal slashes (v/vt/vn structure)
+            return parseInt(p.split('/')[0]) - 1;
+          });
           
-          // Basic triangulation handler for multi-vertex polygon faces
+          // Construct explicit triangles safely from the vertex lookup pool
+          // This loop works smoothly whether the face contains 3 points (tris) or 4 points (quads)
           for (let i = 1; i < parts.length - 1; i++) {
-            finalIndices.push(parts[0], parts[i], parts[i+1]);
+            const v0 = objPositions[parts[0]];
+            const v1 = objPositions[parts[i]];
+            const v2 = objPositions[parts[i+1]];
+
+            if (v0 && v1 && v2) {
+              finalPositions.push(...v0, ...v1, ...v2);
+              
+              // Apply simple shading fallback gradients based on geometry order to give 3D depth definitions
+              finalColors.push(0.5, 0.5, 0.6, 1.0); // Slate tint point 1
+              finalColors.push(0.6, 0.6, 0.7, 1.0); // Medium tint point 2
+              finalColors.push(0.7, 0.7, 0.8, 1.0); // Light highlight point 3
+
+              finalIndices.push(indexCounter, indexCounter + 1, indexCounter + 2);
+              indexCounter += 3;
+            }
           }
         }
       }
 
-      // Format flat typed layout structures for graphic pipelines
-      const flattenedPositions = objPositions.flat();
-      
-      // Inject standard clay-colored mesh shading fallback directly into memory array loops
-      const flattenedColors = [];
-      for (let i = 0; i < objPositions.length; i++) {
-        flattenedColors.push(0.7, 0.7, 0.7, 1.0); // Soft grey clay styling
-      }
-
       return {
-        positions: new Float32Array(flattenedPositions),
-        colors: new Float32Array(flattenedColors),
+        positions: new Float32Array(finalPositions),
+        colors: new Float32Array(finalColors),
         indices: new Uint16Array(finalIndices)
       };
     }
 
-    // Load file via GitHub server runtime configurations
+    // Load file from repository 
     fetch('model.obj')
       .then(response => {
         if (!response.ok) throw new Error('Failed to find model.obj in directory');
@@ -158,7 +164,10 @@
       .then(text => {
         const meshData = parseOBJ(text);
 
-        // Bind structured mesh variables directly to WebGL contexts
+        if (meshData.positions.length === 0) {
+          throw new Error("Parsed 0 vertices. Your OBJ file format might be empty or unindexed.");
+        }
+
         const positionBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, meshData.positions, gl.STATIC_DRAW);
@@ -215,7 +224,7 @@
         cy, sx * sy, -cx * sy, 0,
         0, cx, sx, 0,
         sy, -sx * cy, cx * cy, 0,
-        0, 0, -8.0, 1 // Extends camera distance outward slightly to accommodate models
+        0, 0, -8.0, 1 // Pushes camera back to keep custom models fully visible in screen space
       ];
 
       gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
@@ -241,7 +250,7 @@
       requestAnimationFrame(drawScene);
     }
 
-    // Drag Interaction loop logic from your working file
+    // Interaction loop
     let isDragging = false;
     let previousMousePosition = { x: 0, y: 0 };
 

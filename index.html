@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Production-Ready OBJ 3D Engine From Scratch</title>
+  <title>Material-Proof 3D OBJ Engine</title>
   <style>
     html, body {
       margin: 0;
@@ -25,12 +25,13 @@
       color: #fff;
       font-family: sans-serif;
       font-size: 14px;
+      z-index: 10;
     }
   </style>
 </head>
 <body>
 
-  <div id="loading">Auto-centering and parsing mesh model...</div>
+  <div id="loading">Normalizing and rendering model.obj (Filtering material flags)...</div>
   <canvas id="glCanvas"></canvas>
 
   <script>
@@ -49,6 +50,7 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
+    // SHADERS
     const vsSource = `
       attribute vec4 aVertexPosition;
       attribute vec4 aVertexColor;
@@ -103,31 +105,42 @@
     let cubeRotationY = 0.7;
     let buffers = null;
 
+    // PARSER UPGRADE: Uses explicit array helper parameters to prevent text stripping errors
     function parseOBJ(text) {
       const objPositions = [];
       const finalPositions = [];
       const finalColors = [];
-      const finalIndices = [];
-      
-      let indexCounter = 0;
 
       let minX = Infinity, maxX = -Infinity;
       let minY = Infinity, maxY = -Infinity;
       let minZ = Infinity, maxZ = -Infinity;
 
-      const lines = text.split(/\r?\n/);
+      const lines = text.split('\n');
       
       for (let i = 0; i < lines.length; i++) {
         let line = lines[i].trim();
-        if (line.length === 0 || line.startsWith('#')) continue;
+        
+        if (
+          line.length === 0 || 
+          line.startsWith('#') || 
+          line.startsWith('mtllib') || 
+          line.startsWith('usemtl') || 
+          line.startsWith('g ') || 
+          line.startsWith('o ') || 
+          line.startsWith('s ') || 
+          line.startsWith('vt') || 
+          line.startsWith('vn')
+        ) {
+          continue; 
+        }
 
         const parts = line.split(/\s+/);
-        const type = parts[0];
+        const type = parts.at(0);
 
         if (type === 'v') {
-          const x = Number(parts[1]);
-          const y = Number(parts[2]);
-          const z = Number(parts[3]);
+          const x = Number(parts.at(1));
+          const y = Number(parts.at(2));
+          const z = Number(parts.at(3));
           
           if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
             objPositions.push([x, y, z]);
@@ -137,37 +150,31 @@
             if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
           }
         } else if (type === 'f') {
-          const faceIndices = [];
+          const faceVertices = [];
           
           for (let k = 1; k < parts.length; k++) {
-            if (!parts[k]) continue;
+            const currentPart = parts.at(k);
+            if (!currentPart) continue;
             
-            let vertexIndex = parseInt(parts[k].split('/')[0], 10);
-            
-            if (!isNaN(vertexIndex)) {
-              if (vertexIndex < 0) {
-                vertexIndex = objPositions.length + vertexIndex;
-              } else {
-                vertexIndex = vertexIndex - 1; 
-              }
-              faceIndices.push(vertexIndex);
+            let vIdx = parseInt(currentPart.split('/')[0], 10);
+            if (!isNaN(vIdx)) {
+              vIdx = vIdx < 0 ? objPositions.length + vIdx : vIdx - 1;
+              const coords = objPositions.at(vIdx);
+              if (coords) faceVertices.push(coords);
             }
           }
           
-          for (let j = 1; j < faceIndices.length - 1; j++) {
-            const v0 = objPositions[faceIndices[0]];
-            const v1 = objPositions[faceIndices[j]];
-            const v2 = objPositions[faceIndices[j+1]];
+          for (let j = 1; j < faceVertices.length - 1; j++) {
+            const p0 = faceVertices.at(0);
+            const p1 = faceVertices.at(j);
+            const p2 = faceVertices.at(j + 1);
 
-            if (v0 && v1 && v2) {
-              finalPositions.push(...v0, ...v1, ...v2);
+            if (p0 && p1 && p2) {
+              finalPositions.push(...p0, ...p1, ...p2);
               
-              finalColors.push(0.40, 0.40, 0.45, 1.0);
+              finalColors.push(0.45, 0.45, 0.50, 1.0);
               finalColors.push(0.55, 0.55, 0.60, 1.0);
               finalColors.push(0.65, 0.65, 0.70, 1.0);
-
-              finalIndices.push(indexCounter, indexCounter + 1, indexCounter + 2);
-              indexCounter += 3;
             }
           }
         }
@@ -192,20 +199,20 @@
       return {
         positions: new Float32Array(finalPositions),
         colors: new Float32Array(finalColors),
-        indices: new Uint16Array(finalIndices)
+        vertexCount: finalPositions.length / 3
       };
     }
 
     fetch('model.obj')
       .then(response => {
-        if (!response.ok) throw new Error('Failed to find model.obj in repository folder');
+        if (!response.ok) throw new Error('Could not find model.obj in repository.');
         return response.text();
       })
       .then(text => {
         const meshData = parseOBJ(text);
 
-        if (meshData.positions.length === 0) {
-          throw new Error("Empty index grid data mapping compiled.");
+        if (meshData.vertexCount === 0) {
+          throw new Error("Parsed data returned 0 coordinates. Check export structure.");
         }
 
         const positionBuffer = gl.createBuffer();
@@ -216,15 +223,10 @@
         gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, meshData.colors, gl.STATIC_DRAW);
 
-        const indexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, meshData.indices, gl.STATIC_DRAW);
-
         buffers = {
           position: positionBuffer,
           color: colorBuffer,
-          index: indexBuffer,
-          vertexCount: meshData.indices.length
+          vertexCount: meshData.vertexCount
         };
 
         document.getElementById('loading').style.display = 'none';
@@ -251,8 +253,10 @@
 
       gl.clearColor(0.07, 0.07, 0.09, 1.0);
       gl.clearDepth(1.0);
+      
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LEQUAL);
+      
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
       const projectionMatrix = perspectiveMatrix(45 * Math.PI / 180, canvas.width / canvas.height, 0.1, 100.0);
@@ -275,14 +279,12 @@
       gl.vertexAttribPointer(programInfo.attribLocations.vertexColor, 4, gl.FLOAT, false, 0, 0);
       gl.enableVertexAttribArray(programInfo.attribLocations.vertexColor);
 
-      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.index);
-
       gl.useProgram(programInfo.program);
 
       gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, new Float32Array(projectionMatrix));
       gl.uniformMatrix4fv(programInfo.uniformLocations.modelViewMatrix, false, new Float32Array(modelViewMatrix));
 
-      gl.drawElements(gl.TRIANGLES, buffers.vertexCount, gl.UNSIGNED_SHORT, 0);
+      gl.drawArrays(gl.TRIANGLES, 0, buffers.vertexCount);
 
       cubeRotationX += 0.002;
       cubeRotationY += 0.003;

@@ -5,11 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>3D Model Test</title>
   
-  <!-- Load the Google web component library -->
-  <script type="module" src="https://ajax.googleapis.com"></script>
+  <!-- Alternative public CDN that bypasses the googleapis restrictions -->
+  <script type="module" src="https://unpkg.com"></script>
 
   <style>
-    /* Make the page take up 100% of the browser view with a white background */
     body, html {
       margin: 0;
       padding: 0;
@@ -19,7 +18,6 @@
       overflow: hidden;
     }
 
-    /* Force the 3D viewer canvas to fill the entire window */
     model-viewer {
       width: 100%;
       height: 100%;
@@ -28,11 +26,7 @@
 </head>
 <body>
 
-  <!-- 
-    CRITICAL: 
-    1. Replace 'your-file.glb' with the EXACT name of your converted 3D file.
-    2. Ensure this HTML file and your 3D file are in the same folder.
-  -->
+  <!-- Ensure your filename matches exactly (case-sensitive on GitHub) -->
   <model-viewer 
     src="Agamemnon%20Helmet.glb" 
     alt="A test 3D model"
